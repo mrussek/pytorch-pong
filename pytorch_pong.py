@@ -10,6 +10,8 @@ from collections import namedtuple
 from itertools import count
 import random
 
+device = torch.device("cuda")
+
 
 def frame_to_tensor(x):
     return torch.from_numpy((np.ascontiguousarray(x, dtype=np.float32) / 255).transpose(2, 0, 1)).view(1, 3, 210, 160)
@@ -35,8 +37,8 @@ class DQN(nn.Module):
         return x
 
 
-policy_net = DQN()
-target_net = DQN()
+policy_net = DQN().to(device)
+target_net = DQN().to(device)
 
 optimizer = torch.optim.RMSprop(policy_net.parameters())
 
@@ -70,7 +72,7 @@ def select_action(state, eps=0.10):
         with torch.no_grad():
             return policy_net(state).max(1)[1].view(1, 1)
     else:
-        return torch.tensor([[random.randrange(6)]], dtype=torch.long)
+        return torch.tensor([[random.randrange(6)]], device=device, dtype=torch.long)
 
 
 def optimize_model(buffer, batch, gamma=0.999):
@@ -86,7 +88,6 @@ def optimize_model(buffer, batch, gamma=0.999):
 
     predicted_values = policy_net(states)[:, action].view(batch, 1)
     next_state_values = target_net(next_states).max(1)[0].view(batch, 1).detach()
-    print(rewards.size())
     expected_values = rewards + gamma * next_state_values
     loss = F.smooth_l1_loss(predicted_values, expected_values)
 
@@ -100,7 +101,7 @@ def optimize_model(buffer, batch, gamma=0.999):
 
 
 def get_screen():
-    return frame_to_tensor(env.render(mode='rgb_array'))
+    return frame_to_tensor(env.render(mode='rgb_array')).to(device)
 
 
 if __name__ == '__main__':
@@ -118,6 +119,7 @@ if __name__ == '__main__':
             # Variabalize 210, 160
             state = (current_state - last_state).view(1, 3, 210, 160)
             action = select_action(state)
+            env.render()
             _, reward, done, _ = env.step(action.item())
             reward = torch.tensor([reward]).view(1, 1)
 
@@ -125,7 +127,7 @@ if __name__ == '__main__':
             current_state = get_screen()
             next_state = current_state - last_state
             buffer.push(state, action, next_state, reward)
-            # Replay memoryl
+            # Replay memory
             optimize_model(buffer, 128)
             if done:
                 break
