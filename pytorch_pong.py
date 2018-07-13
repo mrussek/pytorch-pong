@@ -10,7 +10,7 @@ from collections import namedtuple
 from itertools import count
 import random
 
-device = torch.device("cuda")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def frame_to_tensor(x):
